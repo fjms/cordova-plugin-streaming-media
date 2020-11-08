@@ -1,10 +1,11 @@
 package com.hutchind.cordova.plugins.streamingmedia;
 
 import android.app.Activity;
+import android.content.res.AssetFileDescriptor;
 import android.content.res.Configuration;
 import android.graphics.Color;
-import android.graphics.Point;
 import android.media.MediaPlayer;
+import android.view.SurfaceHolder;
 import android.widget.MediaController;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
@@ -12,11 +13,9 @@ import android.view.MotionEvent;
 import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
-import android.view.Display;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
-import android.widget.MediaController;
 import android.widget.ProgressBar;
 import android.widget.RelativeLayout;
 import android.widget.VideoView;
@@ -27,11 +26,14 @@ MediaPlayer.OnErrorListener, MediaPlayer.OnBufferingUpdateListener {
 	private String TAG = getClass().getSimpleName();
 	private VideoView mVideoView = null;
 	private MediaPlayer mMediaPlayer = null;
+	private MediaPlayer mp = null;
 	private MediaController mMediaController = null;
 	private ProgressBar mProgressBar = null;
 	private String mVideoUrl;
+	private Boolean isLocalVideo = false;
 	private Boolean mShouldAutoClose = true;
 	private boolean mControls;
+	private int currentPosition;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -72,12 +74,54 @@ MediaPlayer.OnErrorListener, MediaPlayer.OnBufferingUpdateListener {
 
 	private void play() {
 		mProgressBar.setVisibility(View.VISIBLE);
-		Uri videoUri = Uri.parse(mVideoUrl);
+		if(mVideoUrl.startsWith("file://")){
+			mVideoUrl = mVideoUrl.substring(7);
+			isLocalVideo = true;
+			AssetFileDescriptor fd = null;
+			try {
+				fd = getAssets().openFd(mVideoUrl);
+				mp = new MediaPlayer();
+				mp.setOnCompletionListener(this);
+				mp.setOnPreparedListener(this);
+				mp.setDataSource(fd.getFileDescriptor(), fd.getStartOffset(), fd.getLength());
+				SurfaceHolder holder = mVideoView.getHolder();
+				holder.addCallback(new SurfaceHolder.Callback() {
+					@Override
+					public void surfaceCreated(SurfaceHolder holder) {
+						Log.d(TAG, "surfaceCreated");
+						try {
+							mp.setDisplay(holder);
+						} catch (Exception e) {
+							Log.e(TAG, "exception", e);
+						}
+					}
+
+					@Override
+					public void surfaceDestroyed(SurfaceHolder holder) {
+						Log.d(TAG, "surfaceDestroyed");
+						// mp.release();
+					}
+
+					@Override
+					public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
+						Log.d(TAG, "surfaceChange");
+					}
+				});
+				mp.prepare();
+			} catch (Exception e) {
+				Log.d(TAG, "ERROR LOCAL " + e.getLocalizedMessage());
+			}
+
+		}else{
+			Uri videoUri = Uri.parse(mVideoUrl);
+			mVideoView.setVideoURI(videoUri);
+		}
+
 		try {
 			mVideoView.setOnCompletionListener(this);
 			mVideoView.setOnPreparedListener(this);
 			mVideoView.setOnErrorListener(this);
-			mVideoView.setVideoURI(videoUri);
+
 			mMediaController = new MediaController(this);
 			mMediaController.setAnchorView(mVideoView);
 			mMediaController.setMediaPlayer(mVideoView);
@@ -116,11 +160,16 @@ MediaPlayer.OnErrorListener, MediaPlayer.OnBufferingUpdateListener {
 	@Override
 	public void onPrepared(MediaPlayer mp) {
 		Log.d(TAG, "Stream is prepared");
-		mMediaPlayer = mp;
-		mMediaPlayer.setOnBufferingUpdateListener(this);
-		mVideoView.requestFocus();
-		mVideoView.start();
-		mVideoView.postDelayed(checkIfPlaying, 0);
+		if(isLocalVideo){
+			mProgressBar.setVisibility(View.GONE);
+			mp.start();
+		}else{
+			mMediaPlayer = mp;
+			mVideoView.requestFocus();
+			mVideoView.postDelayed(checkIfPlaying, 0);
+			mMediaPlayer.setOnBufferingUpdateListener(this);
+			mVideoView.start();
+		}
 	}
 
 	private void pause() {
@@ -131,6 +180,31 @@ MediaPlayer.OnErrorListener, MediaPlayer.OnBufferingUpdateListener {
 	private void stop() {
 		Log.d(TAG, "Stopping video.");
 		mVideoView.stopPlayback();
+	}
+
+	@Override
+	protected void onResume() {
+		super.onResume();
+		Log.d(TAG, "onResume");
+		if(isLocalVideo){
+			mp.start();
+		}else{
+			mVideoView.seekTo(currentPosition);
+			mVideoView.start();
+		}
+	}
+
+	@Override
+	protected void onPause() {
+		super.onPause();
+		Log.d(TAG, "onPause");
+		if(isLocalVideo){
+
+			mp.pause();
+		} else{
+			mVideoView.pause();
+			currentPosition = mMediaPlayer.getCurrentPosition();
+		}
 	}
 
 	@Override

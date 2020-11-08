@@ -1,6 +1,10 @@
-# Cordova Streaming Media plugin
+# Cordova Streaming Media plugin with local video.
 
-For iOS and Android, by [Nicholas Hutchind](https://github.com/nchutchind)
+Based in Cordova Streaming Media plugin for iOS and Android, by [Nicholas Hutchind](https://github.com/nchutchind)
+
+Now Support Local Video (path: file://) and lock screen and pause/resume events.
+
+The local video must be in the assets folder, like ionic file://www/assets/android.mp4
 
 ## Description
 
@@ -16,7 +20,7 @@ I no longer contribute to Cordova or Ionic full time. If your org needs work on 
 ## Installation
 
 ```
-cordova plugin add https://github.com/nchutchind/cordova-plugin-streaming-media
+cordova plugin add https://github.com/fjms/cordova-plugin-streaming-media
 ```
 
 ### iOS specifics
